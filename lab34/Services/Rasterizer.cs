@@ -5,101 +5,81 @@ namespace lab34.Services
 {
     public unsafe class Rasterizer
     {
-        private int _width;
-        private int _height;
+        private int _width, _height;
         private float[] _zBuffer;
-        private Vector3 _cameraPos;
-        private Vector3 _lightPos;
-        private Vector3 _lightColor;
-        private Vector3 _objectColor;
+        private Vector3 _cameraPos, _lightPos, _lightColor;
 
-        public Rasterizer(int width, int height, float[] zBuffer, Vector3 cameraPos, Vector3 lightPos, Vector3 lightColor, Vector3 objectColor)
+        public Rasterizer(int width, int height, float[] zBuffer, Vector3 cameraPos, Vector3 lightPos, Vector3 lightColor)
         {
-            _width = width;
-            _height = height;
-            _zBuffer = zBuffer;
+            UpdateSize(width, height, zBuffer);
             _cameraPos = cameraPos;
             _lightPos = lightPos;
             _lightColor = lightColor;
-            _objectColor = objectColor;
         }
 
-        public void UpdateSize(int width, int height, float[] zBuffer)
-        {
-            _width = width;
-            _height = height;
-            _zBuffer = zBuffer;
+        public void UpdateSize(int w, int h, float[] zb) { _width = w; _height = h; _zBuffer = zb; }
+        public void UpdateCamera(Vector3 cp) => _cameraPos = cp;
+
+        public struct Vertex {
+            public Vector2 Screen;
+            public float WInv; 
+            public Vector2 UVW;
+            public Vector3 NormalW;
+            public Vector3 PosW;
         }
 
-        public void UpdateCamera(Vector3 cameraPos)
+        public void FillTriangle(int* buffer, int stride, Vertex v1, Vertex v2, Vertex v3, 
+            TextureMap? diffMap, TextureMap? normMap, TextureMap? specMap, Matrix4x4 modelMatrix)
         {
-            _cameraPos = cameraPos;
-        }
+            if (v1.Screen.Y > v2.Screen.Y) Swap(ref v1, ref v2);
+            if (v1.Screen.Y > v3.Screen.Y) Swap(ref v1, ref v3);
+            if (v2.Screen.Y > v3.Screen.Y) Swap(ref v2, ref v3);
 
-        public void FillTriangle(int* buffer, int stride,
-            float x1, float y1, float z1,
-            float x2, float y2, float z2,
-            float x3, float y3, float z3,
-            Vector3 n1, Vector3 n2, Vector3 n3,
-            Vector3 p1, Vector3 p2, Vector3 p3)
-        {
-            if (y1 > y2) { Swap(ref x1, ref x2); Swap(ref y1, ref y2); Swap(ref z1, ref z2); Swap(ref n1, ref n2); Swap(ref p1, ref p2); }
-            if (y1 > y3) { Swap(ref x1, ref x3); Swap(ref y1, ref y3); Swap(ref z1, ref z3); Swap(ref n1, ref n3); Swap(ref p1, ref p3); }
-            if (y2 > y3) { Swap(ref x2, ref x3); Swap(ref y2, ref y3); Swap(ref z2, ref z3); Swap(ref n2, ref n3); Swap(ref p2, ref p3); }
+            int yStart = (int)Math.Max(0, Math.Ceiling(v1.Screen.Y));
+            int yEnd = (int)Math.Min(_height - 1, Math.Floor(v3.Screen.Y));
 
-            int iy1 = (int)y1, iy2 = (int)y2, iy3 = (int)y3;
-            float totalH = y3 - y1;
-            if (totalH < 1f) return;
-
-            for (int y = iy1; y <= iy3; y++)
+            for (int y = yStart; y <= yEnd; y++)
             {
-                if (y < 0 || y >= _height) continue;
+                bool bottom = y > v2.Screen.Y || v2.Screen.Y == v1.Screen.Y;
+                float hSum = bottom ? v3.Screen.Y - v2.Screen.Y : v2.Screen.Y - v1.Screen.Y;
+                float t1 = (y - v1.Screen.Y) / (v3.Screen.Y - v1.Screen.Y);
+                float t2 = (y - (bottom ? v2.Screen.Y : v1.Screen.Y)) / hSum;
 
-                bool inBottom = y <= iy2;
-                float alpha = (y - y1) / totalH;
-                float beta = inBottom
-                    ? ((y2 - y1) < 1f ? 0f : (y - y1) / (y2 - y1))
-                    : ((y3 - y2) < 1f ? 0f : (y - y2) / (y3 - y2));
+                Vertex a = Lerp(v1, v3, t1);
+                Vertex b = bottom ? Lerp(v2, v3, t2) : Lerp(v1, v2, t2);
+                if (a.Screen.X > b.Screen.X) Swap(ref a, ref b);
 
-                float ax = x1 + (x3 - x1) * alpha;
-                float az = z1 + (z3 - z1) * alpha;
-                Vector3 an = Vector3.Normalize(n1 + (n3 - n1) * alpha);
-                Vector3 ap = p1 + (p3 - p1) * alpha;
+                int xStart = (int)Math.Max(0, Math.Ceiling(a.Screen.X));
+                int xEnd = (int)Math.Min(_width - 1, Math.Floor(b.Screen.X));
 
-                float bx = inBottom ? x1 + (x2 - x1) * beta : x2 + (x3 - x2) * beta;
-                float bz = inBottom ? z1 + (z2 - z1) * beta : z2 + (z3 - z2) * beta;
-                Vector3 bn = Vector3.Normalize(inBottom ? n1 + (n2 - n1) * beta : n2 + (n3 - n2) * beta);
-                Vector3 bp = inBottom ? p1 + (p2 - p1) * beta : p2 + (p3 - p2) * beta;
-
-                if (ax > bx)
+                for (int x = xStart; x <= xEnd; x++)
                 {
-                    Swap(ref ax, ref bx);
-                    Swap(ref az, ref bz);
-                    Swap(ref an, ref bn);
-                    Swap(ref ap, ref bp);
-                }
+                    float tx = (x - a.Screen.X) / (b.Screen.X - a.Screen.X);
+                    if (a.Screen.X == b.Screen.X) tx = 1;
 
-                int ixStart = Math.Max((int)ax, 0);
-                int ixEnd = Math.Min((int)bx, _width - 1);
-                float dx = bx - ax;
+                    float wInv = a.WInv + (b.WInv - a.WInv) * tx;
+                    float z = 1.0f / wInv;
 
-                for (int x = ixStart; x <= ixEnd; x++)
-                {
-                    float t = dx < 1f ? 0f : (x - ax) / dx;
-                    float z = az + (bz - az) * t;
-
-                    int idx = y * _width + x;
-                    if (z < _zBuffer[idx])
+                    if (z < _zBuffer[y * _width + x])
                     {
-                        _zBuffer[idx] = z;
-                        Vector3 norm = Vector3.Normalize(an + (bn - an) * t);
-                        Vector3 pos = ap + (bp - ap) * t;
-                        buffer[y * stride + x] = LightingHelper.ComputePhongColor(norm, pos, _lightPos, _lightColor, _objectColor, _cameraPos);
+                        _zBuffer[y * _width + x] = z;
+                        Vector2 uv = (a.UVW + (b.UVW - a.UVW) * tx) * z;
+                        Vector3 pos = (a.PosW + (b.PosW - a.PosW) * tx) * z;
+                        Vector3 norm = Vector3.Normalize((a.NormalW + (b.NormalW - a.NormalW) * tx) * z);
+
+                        Vector3 color = diffMap?.Sample(uv) ?? new Vector3(0, 0, 1);
+                        if (normMap != null) {
+                            Vector3 sampled = normMap.Sample(uv);
+                            Vector3 modelNorm = Vector3.Normalize(sampled * 2.0f - Vector3.One); // Формула 4.1
+                            norm = Vector3.Normalize(Vector3.TransformNormal(modelNorm, modelMatrix));
+                        }
+                        float ks = specMap?.Sample(uv).X ?? 0.5f;
+
+                        buffer[y * stride + x] = LightingHelper.ComputePhongColor(norm, pos, _lightPos, _lightColor, color, ks, _cameraPos);
                     }
                 }
             }
         }
-
         public void DrawLine(int* buffer, int x1, int y1, int x2, int y2, int color, int stride)
         {
             int dx = Math.Abs(x2 - x1);
@@ -114,18 +94,20 @@ namespace lab34.Services
                 {
                     buffer[y1 * stride + x1] = color;
                 }
-
                 if (x1 == x2 && y1 == y2) break;
-
                 int e2 = 2 * err;
                 if (e2 > -dy) { err -= dy; x1 += sx; }
                 if (e2 < dx) { err += dx; y1 += sy; }
             }
         }
+        private Vertex Lerp(Vertex a, Vertex b, float t) => new Vertex {
+            Screen = Vector2.Lerp(a.Screen, b.Screen, t),
+            WInv = a.WInv + (b.WInv - a.WInv) * t,
+            UVW = Vector2.Lerp(a.UVW, b.UVW, t),
+            NormalW = Vector3.Lerp(a.NormalW, b.NormalW, t),
+            PosW = Vector3.Lerp(a.PosW, b.PosW, t)
+        };
 
-        private void Swap<T>(ref T a, ref T b)
-        {
-            (a, b) = (b, a);
-        }
+        private void Swap<T>(ref T a, ref T b) { var t = a; a = b; b = t; }
     }
 }

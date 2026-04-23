@@ -30,7 +30,10 @@
                         <TextBlock Text="Open File" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                
+                <!-- Добавьте эти кнопки в StackPanel в верхней части Grid -->
+                <Button Content="Load Diffuse" Click="BtnLoadDiffuse_Click" Width="100" Margin="5" Background="#4CAF50" Foreground="White"/>
+                <Button Content="Load Normal" Click="BtnLoadNormal_Click" Width="100" Margin="5" Background="#2196F3" Foreground="White"/>
+                <Button Content="Load Specular" Click="BtnLoadSpecular_Click" Width="100" Margin="5" Background="#9C27B0" Foreground="White"/>
                 <Button x:Name="btnResetCamera" 
                         Click="BtnResetCamera_Click" 
                         Width="120" Height="35" 
