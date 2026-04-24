@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -19,7 +20,6 @@ namespace lab34.Views
         private ModelData? _model;
         private string? _currentFilePath;
 
-        // Поля для текстур
         private TextureMap? _diffuseMap;
         private TextureMap? _normalMap;
         private TextureMap? _specularMap;
@@ -87,13 +87,11 @@ namespace lab34.Views
                     _bitmap = new WriteableBitmap(_width, _height, 96, 96, PixelFormats.Bgr32, null);
                     imageContainer.Source = _bitmap;
                     _zBuffer = new float[_width * _height];
-                    // Обновленный конструктор растеризатора (без objectColor, так как он берется из текстур или по умолчанию)
                     _rasterizer = new Rasterizer(_width, _height, _zBuffer, _cameraPos, _lightPos, _lightColor);
                 }
             }
         }
 
-        // Методы загрузки текстур
         private void BtnLoadDiffuse_Click(object sender, RoutedEventArgs e) { _diffuseMap = OpenTex(); RenderModel(_model); }
         private void BtnLoadNormal_Click(object sender, RoutedEventArgs e) { _normalMap = OpenTex(); RenderModel(_model); }
         private void BtnLoadSpecular_Click(object sender, RoutedEventArgs e) { _specularMap = OpenTex(); RenderModel(_model); }
@@ -161,7 +159,6 @@ namespace lab34.Views
             _modelSize = Math.Max(max.X - min.X, Math.Max(max.Y - min.Y, max.Z - min.Z));
         }
 
-        // Мышь и управление
         private void OnMouseDown(object sender, MouseButtonEventArgs e) { if (_model != null) { _isDragging = true; _lastMousePos = e.GetPosition(this); Mouse.Capture(this); } }
         private void OnMouseUp(object sender, MouseButtonEventArgs e) { _isDragging = false; Mouse.Capture(null); }
         private void OnMouseMove(object sender, MouseEventArgs e)
@@ -219,7 +216,6 @@ namespace lab34.Views
             finally { _bitmap.Unlock(); _isRendering = false; }
         }
 
-        // ОБНОВЛЕННЫЙ МЕТОД RenderSolid
         private unsafe void RenderSolid(ModelData model, int* buffer, int stride, Matrix4x4 modelMatrix, Matrix4x4 mvp)
         {
             foreach (var face in model.Faces)
@@ -239,14 +235,12 @@ namespace lab34.Views
             }
         }
 
-        // НОВЫЙ МЕТОД PrepareVertex
         private Rasterizer.Vertex PrepareVertex(ModelData m, int vIdx, int tIdx, int nIdx, Vector4 clip, Matrix4x4 modelM)
         {
             float wi = 1.0f / clip.W;
             Vector3 wp = Vector3.Transform(m.Vertices[vIdx], modelM);
             Vector3 nm = Vector3.TransformNormal(m.Normals[nIdx], modelM);
             
-            // Защита от отсутствия текстурных координат в файле
             Vector2 uv = (m.TexCoords != null && m.TexCoords.Length > tIdx && tIdx >= 0) 
                          ? m.TexCoords[tIdx] 
                          : Vector2.Zero;
@@ -259,7 +253,61 @@ namespace lab34.Views
                 PosW = wp * wi
             };
         }
+private void BtnLoadAllTextures_Click(object sender, RoutedEventArgs e)
+{
+    var op = new OpenFileDialog 
+    { 
+        Title = "Выберите диффузную карту (Diffuse Map)",
+        Filter = "Images|*.jpg;*.png;*.bmp;*.tga" 
+    };
 
+    if (op.ShowDialog() == true)
+    {
+        try
+        {
+            string diffPath = op.FileName;
+            string directory = Path.GetDirectoryName(diffPath)!;
+            string fileName = Path.GetFileNameWithoutExtension(diffPath);
+            string ext = Path.GetExtension(diffPath);
+
+            _diffuseMap = new TextureMap(diffPath);
+
+            string baseName = fileName.Replace("_diffuse", "").Replace("_diff", "").Replace("_d", "").Replace("_color", "");
+
+            string[] normalSuffixes = { "_normal", "_norm", "_n", "_nm" };
+            _normalMap = null; 
+            foreach (var s in normalSuffixes)
+            {
+                string path = Path.Combine(directory, baseName + s + ext);
+                if (File.Exists(path))
+                {
+                    _normalMap = new TextureMap(path);
+                    break;
+                }
+            }
+
+            string[] specularSuffixes = { "_specular", "_spec", "_s", "_sp" };
+            _specularMap = null; 
+            foreach (var s in specularSuffixes)
+            {
+                string path = Path.Combine(directory, baseName + s + ext);
+                if (File.Exists(path))
+                {
+                    _specularMap = new TextureMap(path);
+                    break;
+                }
+            }
+
+            MessageBox.Show($"Текстуры загружены:\nDiffuse: Да\nNormal: {(_normalMap != null ? "Найдена" : "Нет")}\nSpecular: {(_specularMap != null ? "Найдена" : "Нет")}");
+            
+            RenderModel(_model);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Ошибка при автозагрузке текстур: {ex.Message}");
+        }
+    }
+}
         private unsafe void RenderWireframe(ModelData model, int* buffer, int stride, Matrix4x4 mvp)
         {
             int wireColor = unchecked((int)0xFFFFFFFF);

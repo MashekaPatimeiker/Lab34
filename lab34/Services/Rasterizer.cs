@@ -70,7 +70,7 @@ namespace lab34.Services
                         Vector3 color = diffMap?.Sample(uv) ?? new Vector3(0, 0, 1);
                         if (normMap != null) {
                             Vector3 sampled = normMap.Sample(uv);
-                            Vector3 modelNorm = Vector3.Normalize(sampled * 2.0f - Vector3.One); // Формула 4.1
+                            Vector3 modelNorm = Vector3.Normalize(sampled * 2.0f - Vector3.One);
                             norm = Vector3.Normalize(Vector3.TransformNormal(modelNorm, modelMatrix));
                         }
                         float ks = specMap?.Sample(uv).X ?? 0.5f;
