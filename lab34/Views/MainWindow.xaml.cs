@@ -38,7 +38,7 @@ namespace lab34.Views
         private bool _wireframeMode;
 
         private readonly Vector3 _lightPos = new Vector3(2f, 4f, 3f);
-        private readonly Vector3 _lightColor = new Vector3(1f, 1f, 1f);
+        private readonly Vector3 _lightColor = new Vector3(0f, 0f, 1f); 
         private readonly Vector3 _objectColor = new Vector3(0.8f, 0.7f, 0.6f);
 
         private Rasterizer? _rasterizer;
