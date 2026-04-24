@@ -8,8 +8,8 @@ namespace lab34.Services
         public static int ComputePhongColor(Vector3 normal, Vector3 fragPos, Vector3 lightPos, 
             Vector3 lightColor, Vector3 objectColor, float ks, Vector3 cameraPos)
         {
-            const float ka = 0.15f;
-            const float kd = 0.8f;
+            const float ka = 0.3f;
+            const float kd = 1.0f;
             const float shininess = 32f;
 
             Vector3 ambient = ka * lightColor;
