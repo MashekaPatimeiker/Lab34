@@ -73,7 +73,7 @@ namespace lab34.Services
             }
             else
             {
-                normals = ComputeSmoothNormals(vertices, faces);
+                normals = ComputeSmooth(vertices, faces);
                 var updatedFaces = new List<Face>();
                 foreach (var f in faces)
                     updatedFaces.Add(new Face(f.V1, f.V2, f.V3, f.V1, f.V2, f.V3));
@@ -105,7 +105,7 @@ namespace lab34.Services
             return (vIdx, nIdx);
         }
 
-        private static Vector3[] ComputeSmoothNormals(List<Vector3> vertices, List<Face> faces)
+        private static Vector3[] ComputeSmooth(List<Vector3> vertices, List<Face> faces)
         {
             var normals = new Vector3[vertices.Count];
 
